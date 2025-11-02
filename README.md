@@ -1,8 +1,29 @@
 # Firefox Sync Server (syncstorage-rs)
 
-Self-hosted Mozilla Firefox Sync Storage server running on Docker with MariaDB. This is a production-ready setup with multi-architecture support, automated CI/CD, and comprehensive documentation.
+[![Docker Build](https://github.com/buildplan/ff-sync/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/buildplan/ff-sync/actions/workflows/docker-publish.yml)
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)]
+
+Self-hosted Mozilla Firefox Sync Storage server running on Docker with MariaDB. Docker image with multi-architecture support, automated CI/CD.
 
 **Status:** ✅ Tested and verified working with syncstorage-rs v0.18.3
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [System Requirements](#system-requirements)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start-5-minutes)
+- [Version Information](#version-information)
+- [Pre-Production Checklist](#pre-production-checklist)
+- [Deployment Scenarios](#deployment-scenarios)
+- [Connecting Firefox Clients](#connecting-firefox-clients)
+- [Monitoring & Maintenance](#monitoring--maintenance)
+- [Troubleshooting](#troubleshooting)
+- [Resources](#resources)
+
+---
 
 ## Features
 
@@ -12,8 +33,8 @@ Self-hosted Mozilla Firefox Sync Storage server running on Docker with MariaDB. 
 - **Security-focused** - runs as non-root user, no exposed secrets in images
 - **UTF-8 database** support for international characters
 - **Health checks** - built-in readiness probes for container orchestration
-- **Development-friendly** - dev and main branches with separate images
-- **Well-documented** - comprehensive setup, deployment, and troubleshooting guides
+
+---
 
 ## System Requirements
 
@@ -30,6 +51,8 @@ Self-hosted Mozilla Firefox Sync Storage server running on Docker with MariaDB. 
 - Stable internet connection
 - Domain name (for Firefox clients to connect)
 - Reverse proxy (nginx/Cloudflare) for HTTPS
+
+---
 
 ## Architecture
 
@@ -65,6 +88,8 @@ Self-hosted Mozilla Firefox Sync Storage server running on Docker with MariaDB. 
 └─────────────────────────────────────────────┘
 ```
 
+---
+
 ## File Structure
 
 ```
@@ -87,20 +112,22 @@ firefox-sync/
 └── README.md                         # This file
 ```
 
+---
+
 ## Quick Start (5 minutes)
 
 ### 1. Prerequisites
 
 Ensure you have Docker and Docker Compose installed:
 
-```
+```bash
 docker --version  # Should be 20.10+
 docker compose version  # Should be 2.0+
 ```
 
 ### 2. Clone Repository
 
-```
+```bash
 git clone https://github.com/yourusername/firefox-sync.git
 cd firefox-sync
 ```
@@ -109,7 +136,7 @@ cd firefox-sync
 
 Generate cryptographically secure random values for production:
 
-```
+```bash
 # Generate 64-character master secret
 MASTER_SECRET=$(cat /dev/urandom | base32 | head -c64)
 echo "SYNC_MASTER_SECRET: $MASTER_SECRET"
@@ -128,14 +155,14 @@ echo "MYSQL_PASSWORD: $DB_SYNC_PASS"
 
 ### 4. Configure Environment
 
-```
+```bash
 cp example.env .env
 nano .env  # or use your preferred editor
 ```
 
 **Required configuration:**
 
-```
+```bash
 # Your public domain (what Firefox clients will connect to)
 SYNC_URL=https://sync.example.com
 
@@ -152,9 +179,10 @@ MYSQL_PASSWORD=<your-32-char-password>
 LOGLEVEL=warn
 ```
 
+
 ### 5. Start Services
 
-```
+```bash
 # Build and start containers
 docker compose up -d
 
@@ -168,8 +196,8 @@ docker compose logs -f syncserver
 curl http://localhost:8000/__heartbeat__
 ```
 
-Expected response:
-```
+**Expected response:**
+```json
 {
   "version":"0.18.3",
   "database":"Ok",
@@ -177,6 +205,20 @@ Expected response:
   "quota":{"enabled":false,"size":0}
 }
 ```
+
+---
+
+## Version Information
+
+| Component | Version | Notes |
+|-----------|---------|-------|
+| **syncstorage-rs** | v0.18.3 | Sync storage backend |
+| **MariaDB** | 11.4+ | Database engine |
+| **Docker** | 20.10+ | Container runtime |
+| **Docker Compose** | 2.0+ | Orchestration |
+| **Tested On** | Debian 13 (amd64), Ubuntu 24.04 (arm64) | Verified platforms |
+
+---
 
 ## Environment Variables Reference
 
@@ -190,11 +232,74 @@ Expected response:
 | `MYSQL_PASSWORD` | ✅ Yes | - | Sync user password (same as DB_SYNC_PASS) |
 | `LOGLEVEL` | ❌ No | `warn` | Verbosity (error, warn, info, debug, trace) |
 
+---
+
+## Quick Reference
+
+### Essential Commands
+
+```bash
+# Start services
+docker compose up -d
+
+# View logs
+docker compose logs -f syncserver
+
+# Health check
+curl http://localhost:8000/__heartbeat__
+
+# Stop services (keep data)
+docker compose down
+
+# Stop and remove all data
+docker compose down -v
+
+# Restart services
+docker compose restart
+
+# View resource usage
+docker stats
+
+# Database backup
+docker compose exec mariadb mysqldump -u sync -p${MYSQL_PASSWORD} syncstorage_rs > backup.sql
+```
+
+### File Locations
+
+| Component | Location |
+|-----------|----------|
+| Secrets | `.env` (never commit) |
+| Config | `./config/local.toml` (generated) |
+| Database | `./mariadb_data/` (persisted volume) |
+| Logs | `docker compose logs` (Docker) |
+| App | `./app/` (Dockerfile, entrypoint.sh) |
+
+---
+
+## Pre-Production Checklist
+
+Before deploying to production, ensure:
+
+- [ ] Domain name registered and DNS configured
+- [ ] SSL/TLS certificate obtained (Let's Encrypt recommended)
+- [ ] Reverse proxy (nginx) installed and configured
+- [ ] Firewall configured (only ports 80/443 exposed)
+- [ ] Generated strong, random secrets (64+ characters)
+- [ ] Backup plan in place
+- [ ] Monitoring/alerting configured
+- [ ] `.env` file is in `.gitignore` and never committed
+- [ ] Database backups automated
+- [ ] Server firewall and updates current
+- [ ] Heartbeat endpoint tested and responding
+- [ ] HTTPS certificate valid and auto-renewal configured
+
+---
+
 ## Deployment Scenarios
 
 ### Scenario 1: Local Testing (macOS/Linux/Windows)
 
-```
+```bash
 # Development setup
 cp example.env .env
 nano .env  # Use test values
@@ -210,7 +315,7 @@ docker compose down -v
 ### Scenario 2: Production on VPS (Ubuntu 22.04+)
 
 **Prerequisites:**
-```
+```bash
 # Update system
 sudo apt update && sudo apt upgrade -y
 
@@ -226,7 +331,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 ```
 
 **Setup:**
-```
+```bash
 cd /opt
 sudo git clone https://github.com/yourusername/firefox-sync.git
 cd firefox-sync
@@ -243,7 +348,7 @@ sudo systemctl enable docker
 ```
 
 **Reverse Proxy (nginx example):**
-```
+```nginx
 server {
     listen 443 ssl http2;
     server_name sync.example.com;
@@ -276,12 +381,11 @@ server {
 
 For large deployments, run multiple Syncserver instances:
 
-```
+```yaml
 # Server 1: Database (MariaDB only)
 # Server 2+: Syncserver instances connecting to Server 1
 
 # Server 1 docker-compose.yml
-version: '3.8'
 services:
   mariadb:
     image: linuxserver/mariadb:latest
@@ -298,6 +402,8 @@ services:
       SYNC_TOKENSERVER_DATABASE_URL: mysql://sync:${MYSQL_PASSWORD}@server1.local:3306/tokenserver_rs
 ```
 
+---
+
 ## Connecting Firefox Clients
 
 ### Desktop (Windows/macOS/Linux)
@@ -312,6 +418,8 @@ services:
 - Enable logging: Set `services.sync.log.appender.file.logOnSuccess` to `true`
 - Check logs: Visit `about:sync-log`
 - Server logs: `docker compose logs -f syncserver`
+
+> **Tip:** Firefox will automatically sync every 5 minutes. You can also trigger manual sync from the main menu or by visiting `about:sync-log` to see detailed sync status.
 
 ### Mobile (iOS/Android)
 
@@ -328,11 +436,13 @@ services:
 4. Custom Sync Server: `https://sync.example.com`
 5. Sign in
 
+---
+
 ## Monitoring & Maintenance
 
 ### View Logs
 
-```
+```bash
 # Realtime logs
 docker compose logs -f
 
@@ -351,7 +461,7 @@ docker compose logs > logs-$(date +%Y%m%d).txt
 
 ### Health Checks
 
-```
+```bash
 # Server health endpoint
 curl https://sync.example.com/__heartbeat__
 
@@ -368,23 +478,25 @@ docker stats
 ### Backup Database
 
 **Manual backup:**
-```
+```bash
 docker compose exec mariadb mysqldump -u sync -p${MYSQL_PASSWORD} --single-transaction --quick syncstorage_rs > backup-syncstorage-$(date +%Y%m%d).sql
 
 docker compose exec mariadb mysqldump -u sync -p${MYSQL_PASSWORD} --single-transaction --quick tokenserver_rs >> backup-syncstorage-$(date +%Y%m%d).sql
 ```
 
 **Automated daily backup (cron):**
-```
-# Add to crontab
+```bash
+# Add to crontab with: crontab -e
 0 2 * * * cd /opt/firefox-sync && docker compose exec -T mariadb mysqldump -u sync -p${MYSQL_PASSWORD} syncstorage_rs > /backups/sync-$(date +\%Y\%m\%d).sql
 ```
 
 **Restore from backup:**
-```
+```bash
 docker compose exec -T mariadb mysql -u sync -p${MYSQL_PASSWORD} syncstorage_rs < backup-syncstorage-20251102.sql
 docker compose exec -T mariadb mysql -u sync -p${MYSQL_PASSWORD} tokenserver_rs < backup-tokenserver-20251102.sql
 ```
+
+---
 
 ## Updating
 
@@ -392,7 +504,7 @@ docker compose exec -T mariadb mysql -u sync -p${MYSQL_PASSWORD} tokenserver_rs 
 
 The GitHub repository is monitored for upstream changes. To update:
 
-```
+```bash
 # Pull latest code
 git pull origin main
 
@@ -411,12 +523,11 @@ docker compose logs -f syncserver
 
 To use a newer syncstorage-rs version:
 
-```
+```bash
 # Edit app/Dockerfile
 nano app/Dockerfile
 
 # Change the GIT_COMMIT line to the desired commit hash
-# Or update to a specific tag (requires code change)
 
 # Rebuild and test on dev branch
 git add app/Dockerfile
@@ -432,13 +543,17 @@ curl http://localhost:8000/__heartbeat__
 git checkout main
 git merge dev
 git push origin main
+
+# GitHub Actions automatically builds and publishes to ghcr.io
 ```
+
+---
 
 ## Troubleshooting
 
 ### Container won't start
 
-```
+```bash
 # Check error logs
 docker compose logs syncserver
 
@@ -453,7 +568,7 @@ docker compose up -d
 
 ### Database connection refused
 
-```
+```bash
 # Verify MariaDB is running
 docker compose ps mariadb
 
@@ -469,7 +584,7 @@ docker compose logs mariadb | tail -50
 
 ### Port 8000 already in use
 
-```
+```bash
 # Find process using port
 lsof -i :8000
 
@@ -483,7 +598,7 @@ docker compose up -d
 
 ### Out of disk space
 
-```
+```bash
 # Check usage
 df -h
 
@@ -505,11 +620,13 @@ rm -f /backups/sync-*.sql
 4. Firewall rules allow traffic
 5. Server logs: `docker compose logs syncserver`
 
+---
+
 ## Performance Tuning
 
 ### For Small Deployments (< 10 users)
 
-```
+```yaml
 # docker-compose.yml
 environment:
   SYNC_CAPACITY: 10
@@ -521,7 +638,7 @@ mariadb:
 
 ### For Medium Deployments (10-100 users)
 
-```
+```yaml
 environment:
   SYNC_CAPACITY: 50
 
@@ -534,10 +651,12 @@ mariadb:
 
 Run multiple Syncserver instances with a single MariaDB:
 
-```
+```bash
 # Use reverse proxy to load balance
 # or scale horizontally across servers
 ```
+
+---
 
 ## Security Best Practices
 
@@ -552,18 +671,21 @@ Run multiple Syncserver instances with a single MariaDB:
 - ✅ **Use VPN** for administrative access if possible
 - ✅ **Enable SELinux/AppArmor** for additional container isolation
 
+---
+
 ## CI/CD Pipeline
 
 This repository includes a GitHub Actions workflow that:
 
-1. **On push to `dev`**: Builds image for testing
+1. **On push to `dev`**: Builds image for testing (only on code changes)
 2. **On push to `main`**: Builds multi-arch images (amd64, arm64) and publishes to ghcr.io
 3. **On git tags** (`v*.*.*`): Creates versioned releases
 4. **Manual trigger**: Available via workflow_dispatch
+5. **Smart skipping**: Ignores documentation and config file changes
 
 ### Manual Build Trigger
 
-```
+```bash
 # Push to dev to test
 git push origin dev
 
@@ -576,6 +698,8 @@ git push origin main
 # ghcr.io/yourusername/firefox-sync:main
 ```
 
+---
+
 ## Resources
 
 - **syncstorage-rs** - [GitHub Repository](https://github.com/mozilla-services/syncstorage-rs)
@@ -583,22 +707,17 @@ git push origin main
 - **Docker** - [Official Documentation](https://docs.docker.com)
 - **MariaDB** - [Official Documentation](https://mariadb.com/docs/)
 
+---
+
 ## Support
 
 ### Getting Help
 
 1. Check the **Troubleshooting** section above
-2. Search existing **GitHub Issues**
-3. Review **Server Logs**: `docker compose logs syncserver`
-4. Check **Mozilla Documentation**: https://github.com/mozilla-services/syncstorage-rs
+2. Review **Server Logs**: `docker compose logs syncserver`
+3. Check **Mozilla Documentation**: https://github.com/mozilla-services/syncstorage-rs
 
-### Reporting Issues
-
-Include when reporting issues:
-- Output of `docker compose logs syncserver` (last 100 lines)
-- Your OS and Docker version: `docker --version && docker compose version`
-- What you did before the error
-- What error you received
+---
 
 ## License
 
@@ -609,7 +728,4 @@ See [LICENSE](./LICENSE) file for details.
 ---
 
 **Last Updated:** November 2, 2025
-**Status:** Production Ready ✅
-```
-
-[1](https://github.com/mozilla-services/syncstorage-rs)
+**Status:** ✅ Works with dev tag
