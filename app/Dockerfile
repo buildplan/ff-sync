@@ -1,12 +1,11 @@
-from rust:latest
+# Stage 1: Builder
+FROM rust:latest AS builder
 
 ARG GIT_COMMIT=1dc421474df2a4ee973d529534cd0eb7189d58ce
 
-# Create needed directories
-RUN mkdir /app /config
 WORKDIR /app
 
-# Install needed packages
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-virtualenv \
     python3-pip \
@@ -18,22 +17,51 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN git clone https://github.com/mozilla-services/syncstorage-rs ./ \
     && git checkout ${GIT_COMMIT} \
     && cargo install --path ./syncserver --no-default-features --features=syncstorage-db/mysql --locked \
-    && cargo install diesel_cli --no-default-features --features 'mysql' \
+    && cargo install diesel_cli --no-default-features --features mysql \
     && cargo clean
 
 # Setup the Python venv
 RUN virtualenv venv \
-    && /app/venv/bin/pip install -r requirements.txt \
-    && /app/venv/bin/pip install -r tools/tokenserver/requirements.txt \
-    && /app/venv/bin/pip install pyopenssl==22.1.0
+    && /app/venv/bin/pip install --no-cache-dir -r requirements.txt \
+    && /app/venv/bin/pip install --no-cache-dir -r tools/tokenserver/requirements.txt \
+    && /app/venv/bin/pip install --no-cache-dir pyopenssl==22.1.0
 
-# Cleanup
-RUN rm -rf \
-    /var/cache \
-    /var/log \
-    /var/lib/apt \
-    /var/lib/dpkg
+# Stage 2: Runtime
+FROM debian:bookworm-slim
 
-# Copy entrypoint script and set it
-COPY --chmod=755 entrypoint.sh /
-ENTRYPOINT /entrypoint.sh
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    default-mysql-client \
+    python3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r syncserver && useradd -r -g syncserver -u 1000 syncserver
+
+# Create directories with proper ownership
+RUN mkdir -p /app /config && chown -R syncserver:syncserver /app /config
+
+WORKDIR /app
+
+# Copy binaries from builder (cargo install puts them in /usr/local/cargo/bin)
+COPY --from=builder --chown=syncserver:syncserver /usr/local/cargo/bin/syncserver /usr/local/bin/
+COPY --from=builder --chown=syncserver:syncserver /usr/local/cargo/bin/diesel /usr/local/bin/
+
+# Copy Python venv
+COPY --from=builder --chown=syncserver:syncserver /app/venv /app/venv
+
+# Copy migration directories
+COPY --from=builder --chown=syncserver:syncserver /app/syncstorage-mysql /app/syncstorage-mysql
+COPY --from=builder --chown=syncserver:syncserver /app/tokenserver-db /app/tokenserver-db
+
+# Copy entrypoint script
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
+
+# Switch to non-root user
+USER syncserver
+
+# Expose port
+EXPOSE 8000
+
+ENTRYPOINT ["/entrypoint.sh"]

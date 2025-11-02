@@ -2,13 +2,13 @@ name: Docker
 
 on:
   push:
-    branches: 
+    branches:
       - "main"
-      - "dev"  # Add dev branch
-    tags: 
+      - "dev"
+    tags:
       - 'v*.*.*'
   pull_request:
-    branches: 
+    branches:
       - "main"
 
 env:
@@ -27,6 +27,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Set up QEMU for multi-arch builds
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Install cosign
         if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20
@@ -44,7 +48,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # This will generate appropriate tags based on branch/tag
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934
@@ -58,11 +61,13 @@ jobs:
             type=semver,pattern={{major}}
             type=sha,prefix={{branch}}-
 
+      # Build for both arm64 and amd64
       - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09
         with:
           context: app
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
