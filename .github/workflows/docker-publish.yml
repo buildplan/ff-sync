@@ -18,16 +18,67 @@ on:
       - "dev"
     tags:
       - 'v*.*.*'
+    # Only run on changes to files that affect the Docker image
+    paths:
+      - 'app/**'
+      - 'data/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/docker-publish.yml'
+    # Ignore documentation and configuration changes
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'example.env'
+      - 'LICENSE'
   pull_request:
     branches:
       - "main"
+    # Only run on changes to files that affect the Docker image
+    paths:
+      - 'app/**'
+      - 'data/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/docker-publish.yml'
+    # Ignore documentation and configuration changes
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'example.env'
+      - 'LICENSE'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Check if files that affect build have changed
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for meaningful changes
+        id: filter
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f418ce2de6497
+        with:
+          filters: |
+            docker:
+              - 'app/**'
+              - 'data/**'
+              - 'docker-compose.yml'
+              - '.github/workflows/docker-publish.yml'
+
   build:
+    needs: changes
+    # Skip build if only documentation changed
+    if: needs.changes.outputs.docker == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
