@@ -1,32 +1,23 @@
 #!/bin/bash
 set -e
 
-# Parse database connection details from SYNC_TOKENSERVER_DATABASE_URL
-# Format: mysql://user:password@host:port/database
+# Parse database connection details
 parse_db_url() {
     local url="$1"
-    # Remove mysql:// prefix
     url="${url#mysql://}"
-    
-    # Extract user:password
     local userpass="${url%%@*}"
     export DB_USER="${userpass%%:*}"
     export DB_PASS="${userpass#*:}"
-    
-    # Extract host:port/database
     local remainder="${url#*@}"
     local hostport="${remainder%%/*}"
     export DB_HOST="${hostport%%:*}"
     export DB_PORT="${hostport#*:}"
-    
-    # Extract database name
     export DB_NAME="${remainder#*/}"
 }
 
-# Parse the connection URL
 parse_db_url "${SYNC_TOKENSERVER_DATABASE_URL}"
 
-# Wait for database to be ready
+# Wait for database
 echo "Waiting for database ${DB_HOST}:${DB_PORT}..."
 until mysql -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USER}" -p"${DB_PASS}" -e "SELECT 1" >/dev/null 2>&1; do
   printf '.'
@@ -34,10 +25,10 @@ until mysql -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USER}" -p"${DB_PASS}" -e "S
 done
 echo "Database is ready!"
 
-# Run migrations
+# Run migrations - separate directories for syncstorage and tokenserver
 echo "Running migrations..."
-/usr/local/bin/diesel --database-url "${SYNC_SYNCSTORAGE_DATABASE_URL}" migration --migration-dir /app/syncstorage-mysql/migrations run
-/usr/local/bin/diesel --database-url "${SYNC_TOKENSERVER_DATABASE_URL}" migration --migration-dir /app/tokenserver-db/migrations run
+/usr/local/bin/diesel --database-url "${SYNC_SYNCSTORAGE_DATABASE_URL}" migration --migration-dir syncstorage-mysql/migrations run
+/usr/local/bin/diesel --database-url "${SYNC_TOKENSERVER_DATABASE_URL}" migration --migration-dir tokenserver-db/migrations run
 
 # Parse token server database URL for service setup
 proto="$(echo "${SYNC_TOKENSERVER_DATABASE_URL}" | grep :// | sed -e's,^\(.*://\).*,\1,g')"
@@ -58,9 +49,9 @@ INSERT INTO services (id, service, pattern) VALUES
     (1, "sync-1.5", "{node}/1.5/{uid}");
 INSERT INTO nodes (id, service, node, capacity, available, current_load, downed, backoff) VALUES
     (1, 1, "${SYNC_URL}", ${SYNC_CAPACITY}, ${SYNC_CAPACITY}, 0, 0, 0)
-    ON DUPLICATE KEY UPDATE 
-        node = "${SYNC_URL}", 
-        capacity = ${SYNC_CAPACITY}, 
+    ON DUPLICATE KEY UPDATE
+        node = "${SYNC_URL}",
+        capacity = ${SYNC_CAPACITY},
         available = (SELECT ${SYNC_CAPACITY} - current_load FROM (SELECT * FROM nodes) as n2 WHERE id = 1);
 EOF
 
@@ -88,11 +79,10 @@ tokenserver.fxa_browserid_issuer = "https://api.accounts.firefox.com"
 tokenserver.fxa_browserid_server_url = "https://verifier.accounts.firefox.com/v2"
 EOF
 
-# Enter venv and run server
+# Run server
 if [ -z "${LOGLEVEL}" ]; then
   LOGLEVEL=warn
 fi
 
 echo "Starting syncserver with LOGLEVEL=${LOGLEVEL}..."
-source /app/venv/bin/activate
 exec /usr/local/bin/syncserver --config /config/local.toml

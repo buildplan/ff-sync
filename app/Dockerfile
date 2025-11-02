@@ -27,13 +27,14 @@ RUN virtualenv venv \
     && /app/venv/bin/pip install --no-cache-dir pyopenssl==22.1.0
 
 # Stage 2: Runtime
-FROM debian:bookworm-slim
+FROM debian:testing-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     default-mysql-client \
     python3 \
     ca-certificates \
+    libcurl4 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -44,7 +45,7 @@ RUN mkdir -p /app /config && chown -R syncserver:syncserver /app /config
 
 WORKDIR /app
 
-# Copy binaries from builder (cargo install puts them in /usr/local/cargo/bin)
+# Copy binaries from builder
 COPY --from=builder --chown=syncserver:syncserver /usr/local/cargo/bin/syncserver /usr/local/bin/
 COPY --from=builder --chown=syncserver:syncserver /usr/local/cargo/bin/diesel /usr/local/bin/
 
